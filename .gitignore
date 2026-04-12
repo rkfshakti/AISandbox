@@ -1,0 +1,75 @@
+# =============================================================
+#  AISandbox — .gitignore
+# =============================================================
+
+# ── Secrets / Environment ─────────────────────────────────────
+.env
+*.env
+!.env.example
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+site-packages/
+
+# ── uv ────────────────────────────────────────────────────────
+.uv/
+uv.lock
+
+# ── Vector store persistence ──────────────────────────────────
+data/.chroma/
+data/.faiss/
+data/*.db
+data/*.sqlite
+data/__pycache__/
+
+# ── Documents (keep folder structure, not uploaded content) ───
+data/*
+!data/README.md
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+logs/
+nohup.out
+/tmp/sandbox.log
+
+# ── Test / Coverage ───────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ── Jupyter ───────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── OS ────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# ── Editor ────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Docker ────────────────────────────────────────────────────
+docker-data/

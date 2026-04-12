@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aisandbox"
+version = "3.0.0"
+description = "AISandbox — install once, use every AI stack. Zero-config RAG & Agentic AI for any LLM provider."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["aisandbox", "genai", "rag", "agentic-ai", "langchain", "langgraph", "llamaindex", "llm", "sandbox", "openai", "anthropic", "google"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Development Status :: 5 - Production/Stable",
+]
+
+# Core CLI dependencies (installed on the HOST, not inside the container)
+dependencies = [
+    "click>=8.1",
+    "rich>=13.9",
+    "pyyaml>=6.0",
+    "httpx>=0.28",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+aisandbox = "cli.scaffold:cli"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.9",
+    "mypy>=1.14",
+    "httpx>=0.28",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["cli", "serving", "templates", "scripts"]
+
+[project.urls]
+Homepage = "https://github.com/your-org/aisandbox"
+Documentation = "https://github.com/your-org/aisandbox#readme"
+Issues = "https://github.com/your-org/aisandbox/issues"
+
+# ── Ruff linting & formatting ─────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN"]
+ignore = ["E501", "ANN101", "ANN102"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ── Mypy ──────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict = false
+
+# ── Pytest ────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

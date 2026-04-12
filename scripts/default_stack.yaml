@@ -1,0 +1,21 @@
+# Default stack — used when /app/config/stack.yaml is absent
+#
+# orchestrator options : langchain | langgraph | llamaindex | crewai | autogen | dspy | pydantic-ai
+# vector_db options    : chroma | qdrant | pgvector | pinecone | weaviate | faiss | milvus | opensearch
+# llm_provider options : openai | anthropic | google | ollama | groq | mistral | cohere | together | bedrock | azure-openai | nvidia
+# template options     : naive_rag | agentic_rag
+# serving options      : fastapi | streamlit | chainlit | jupyter
+
+orchestrator: langchain
+vector_db: chroma
+llm_provider: openai
+template: naive_rag
+serving: fastapi
+embedding_model: text-embedding-3-small
+chat_model: gpt-4o-mini
+temperature: 0.0
+max_tokens: 2048
+chunk_size: 1000
+chunk_overlap: 150
+top_k: 5
+collection_name: sandbox_docs
