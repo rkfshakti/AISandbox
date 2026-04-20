@@ -206,7 +206,7 @@ async def health() -> dict:
         "template": TEMPLATE,
         "orchestrator": os.getenv("SANDBOX_ORCHESTRATOR", "langchain"),
         "vector_db": os.getenv("SANDBOX_VECTOR_DB", "chroma"),
-        "llm_provider": os.getenv("SANDBOX_LLM_PROVIDER", "openai"),
+        "llm_provider": os.getenv("LLM_PROVIDER", os.getenv("SANDBOX_LLM_PROVIDER", "openai")),
     }
 
 

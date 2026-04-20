@@ -88,6 +88,7 @@ PROVIDERS = [
     ("groq",          "Groq            (Llama 3.3 70B — ultra-fast)"),
     ("mistral",       "Mistral AI      (Mistral Large, Mistral Small)"),
     ("ollama",        "Ollama          (Local LLMs — Llama 3, Qwen 2.5)"),
+    ("lm-studio",     "LM Studio       (Local OpenAI-compatible server)"),
     ("cohere",        "Cohere          (Command R+)"),
     ("together",      "Together AI     (100+ open-source models)"),
     ("bedrock",       "AWS Bedrock     (Claude, Titan, Llama via AWS)"),
@@ -136,6 +137,13 @@ PROVIDER_CONFIG = {
         "chat_model":  "llama3.2",
         "embed_model": "nomic-embed-text",
         "extra_vars":  {},
+    },
+    "lm-studio": {
+        "env_var":     "LM_STUDIO_URL",
+        "docs":        "LM Studio running locally — no API key needed (uses 'lm-studio' as placeholder)",
+        "chat_model":  "qwen3.5-4b",
+        "embed_model": "text-embedding-nomic-embed-text-v1.5",
+        "extra_vars":  {"LM_STUDIO_API_KEY": "lm-studio"},
     },
     "cohere": {
         "env_var":     "COHERE_API_KEY",
