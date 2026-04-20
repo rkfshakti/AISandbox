@@ -1,9 +1,9 @@
 # AISandbox
 
-> **Install once. Use every AI stack. Zero tension.**
+> **`create-react-app` for RAG and Agentic AI. Local-first. Zero boilerplate.**
 
-AISandbox is a `create-react-app`-style CLI for RAG and Agentic AI workflows.  
-Drop your documents in a folder, run `make configure`, and in minutes you have a fully working AI pipeline — with your choice of LLM provider, vector database, orchestration framework, and serving layer.
+AISandbox is a scaffold for building RAG and multi-agent AI pipelines.  
+Drop documents in a folder, run `make configure`, and in minutes you have a fully working AI pipeline — with your choice of LLM provider (including **100% local via LM Studio / Ollama**), vector database, and template.
 
 No package conflicts. No boilerplate. No `.env` hunting.
 
@@ -70,22 +70,24 @@ No need to read docs or find API key names. The wizard handles it:
  ► 1) OpenAI          (gpt-5.4, gpt-5.4-mini, gpt-5.4-nano)
    2) Anthropic       (claude-opus-4-6, claude-sonnet-4-6)
    3) Google          (gemini-2.5-pro, gemini-2.5-flash)
-   4) Groq            (Llama 3.3 70B — ultra-fast)
+   4) Groq            (Llama 3.3 70B — ultra-fast inference)
    5) Mistral AI      (Mistral Large, Mistral Small)
-   6) Ollama          (Local LLMs — Llama 3, Qwen 2.5)
-   7) Cohere          (Command R+)
-   8) Together AI     (100+ open-source models)
-   9) AWS Bedrock     (Claude, Titan, Llama via AWS)
-  10) Azure OpenAI    (gpt-5.4 via Azure)
+   6) Ollama          (Local — Llama 3, Qwen 2.5, Phi-4)
+   7) LM Studio       (Local — any GGUF model, OpenAI-compatible)
+   8) Cohere          (Command R+)
+   9) Together AI     (100+ open-source models)
+  10) AWS Bedrock     (Claude, Titan, Llama via AWS)
+  11) Azure OpenAI    (gpt-5.4 via Azure)
 
 ── Step 2 of 4  —  Enter your API Key ──────────────────
 
+  (For LM Studio / Ollama: press Enter to skip — no key needed)
   Enter your OpenAI API key: **********************
 
 ── Step 3 of 4  —  Choose your Stack ───────────────────
   ...
 
-✓ Configuration saved!
+✓ Configuration saved to .env and config/stack.yaml!
 ```
 
 Writes `.env` and `config/stack.yaml` automatically. Key is never stored in shell history.
@@ -158,7 +160,8 @@ Writes `.env` and `config/stack.yaml` automatically. Key is never stored in shel
 | **Google** | `google-genai 1.72` | gemini-2.5-pro, gemini-2.5-flash |
 | **Groq** | `groq 1.1.2` | llama-3.3-70b (300 tok/s) |
 | **Mistral** | `mistralai 2.3.2` | mistral-large-latest |
-| **Ollama** | `ollama 0.6.1` | llama3.2, qwen2.5, phi-4 (local) |
+| **Ollama** | `ollama 0.6.1` | llama3.2, qwen2.5, phi-4 — local |
+| **LM Studio** | `openai 2.31` | Any GGUF model — local, OpenAI-compatible API |
 | **Cohere** | `cohere 6.1` | command-r-plus |
 | **Together AI** | `together 2.7` | 100+ open models |
 | **AWS Bedrock** | `boto3 1.42` | claude, titan, llama via AWS |
@@ -194,8 +197,8 @@ Writes `.env` and `config/stack.yaml` automatically. Key is never stored in shel
 
 orchestrator: langgraph        # langchain | langgraph | llamaindex | crewai | autogen | dspy | pydantic-ai
 vector_db: chroma              # chroma | qdrant | pgvector | pinecone | faiss | weaviate | milvus | opensearch
-llm_provider: openai           # openai | anthropic | google | groq | mistral | ollama | cohere | together | bedrock | azure-openai
-template: naive_rag            # naive_rag | agentic_rag
+llm_provider: openai           # openai | anthropic | google | groq | mistral | ollama | lm-studio | cohere | together | bedrock | azure-openai
+template: naive_rag            # naive_rag | agentic_rag | structured_output | multi_agent | mcp_server
 serving: fastapi               # fastapi | chainlit | streamlit | jupyter
 
 chat_model: gpt-5.4-mini
@@ -207,6 +210,14 @@ chunk_overlap: 150
 top_k: 5
 collection_name: sandbox_docs
 ```
+
+**LM Studio example** (100% local, no API key):
+```yaml
+llm_provider: lm-studio
+chat_model: qwen3.5-4b
+embedding_model: text-embedding-nomic-embed-text-v1.5
+```
+Set `LM_STUDIO_URL=http://localhost:1234/v1` in `.env`.
 
 ---
 
@@ -240,6 +251,53 @@ Best for: Quick prototyping, single-domain Q&A, demos.
 
 Best for: Complex multi-hop queries, production agents, fallback handling.
 
+### Template C — Structured Output (`structured_output`)
+
+Uses `.with_structured_output()` to return typed Pydantic models instead of free text.
+
+```bash
+# Q&A with confidence score and follow-up questions
+curl -X POST /query -d '{"question": "...", "output_schema": "qa"}'
+
+# Bullet-point summary with title
+curl -X POST /query -d '{"question": "...", "output_schema": "summary"}'
+
+# Named entity extraction
+curl -X POST /query -d '{"question": "...", "output_schema": "entities"}'
+```
+
+Best for: Downstream pipelines that need structured data, not prose.
+
+### Template D — Multi-Agent (`multi_agent`)
+
+LangGraph Supervisor pattern:
+
+```
+[Question]
+     │
+[Supervisor] ── retrieval needed? ──No──► [Direct Answer]
+     │Yes
+[Researcher] → retrieves + drafts
+     │
+[Critic] ── approved? ──No (up to 2x)──► [Researcher]
+     │Yes
+[Writer] → polishes final answer
+```
+
+Best for: Research-style questions needing fact-checking and polish.
+
+### Template E — MCP Server (`mcp_server`)
+
+Exposes your knowledge base as [Model Context Protocol](https://modelcontextprotocol.io) tools, connectable to VS Code Copilot, Claude Desktop, and Cursor.
+
+```bash
+make serve-mcp   # starts stdio MCP server
+```
+
+Tools exposed: `search_knowledge_base`, `ingest_documents`, `get_sandbox_status`.
+
+Best for: Giving AI coding assistants access to your private docs.
+
 ---
 
 ## REST API
@@ -250,8 +308,9 @@ When `serving: fastapi` — Swagger UI at [http://localhost:8000/docs](http://lo
 |---|---|---|
 | `GET` | `/` | Health check + active config |
 | `POST` | `/ingest` | Index all documents in `./data` |
-| `POST` | `/query` | `{"question": "...", "session_id": "..."}` |
-| `GET` | `/metrics` | Requests, latency, error counts |
+| `POST` | `/query` | `{"question": "...", "session_id": "...", "output_schema": "qa|summary|entities"}` |
+| `POST` | `/stream` | Same as `/query` but streams tokens via SSE |
+| `GET` | `/metrics` | Requests, latency, token counts, cost estimate |
 | `GET` | `/docs` | Swagger UI |
 
 ---
@@ -259,16 +318,27 @@ When `serving: fastapi` — Swagger UI at [http://localhost:8000/docs](http://lo
 ## Makefile Commands
 
 ```bash
-make configure    # interactive setup — choose provider & enter API key
-make serve        # run API server locally (no Docker)
-make up           # docker compose up --build
-make down         # docker compose down
-make ingest       # POST /ingest — index ./data documents
-make query Q='…'  # POST /query — ask a question
-make metrics      # GET /metrics
-make logs         # stream container logs
-make docs         # open Swagger UI in browser
-make clean        # remove containers, volumes, cache
+# Setup
+make configure          # interactive wizard — choose provider & enter API key
+make serve              # run API server locally (no Docker)
+make serve-mcp          # run MCP server for VS Code / Claude Desktop / Cursor
+
+# Docker
+make up                 # docker compose up --build
+make down               # docker compose down
+
+# Data & Queries
+make ingest             # index all documents in ./data
+make query Q='...'      # ask a question via REST
+make stream Q='...'     # stream a response token-by-token (SSE)
+make chat               # interactive terminal REPL — no server needed
+make eval               # evaluate RAG quality with Ragas metrics
+
+# Observability
+make metrics            # token counts, latency, cost estimate
+make logs               # stream container logs
+make docs               # open Swagger UI in browser
+make clean              # remove containers, volumes, cache
 ```
 
 ---
@@ -304,10 +374,17 @@ my-project/
 │   ├── ui_chainlit.py
 │   └── ui_streamlit.py
 ├── templates/
-│   ├── naive_rag/
-│   │   └── pipeline.py
-│   └── agentic_rag/
-│       └── pipeline.py
+│   ├── naive_rag/          ← Simple retrieval + generation
+│   ├── agentic_rag/        ← LangGraph: router → grade → fallback
+│   ├── structured_output/  ← Typed Pydantic responses (qa/summary/entities)
+│   ├── multi_agent/        ← Supervisor → Researcher → Critic → Writer
+│   └── mcp_server/         ← MCP tools for Copilot/Claude/Cursor
+├── src/
+│   └── llm_factory.py      ← Multi-provider LLM abstraction (11 providers)
+├── scripts/
+│   ├── configure.py        ← Interactive setup wizard
+│   ├── chat.py             ← Terminal REPL (no server needed)
+│   └── eval.py             ← Ragas evaluation (faithfulness, relevance, precision)
 ├── cli/
 │   └── scaffold.py         ← aisandbox new ... CLI
 ├── docker-compose.yaml
@@ -335,211 +412,7 @@ MIT — use freely for personal and commercial projects.
 
 ---
 
-*Built with Python 3.11+ · Powered by LangChain, LangGraph, LlamaIndex, and the full 2026 AI ecosystem.*
-
-
----
-
-## What It Does
-
-Drop your documents in a folder, choose your stack in a YAML file, and spin up a fully configured AI environment in seconds. No more fighting package conflicts, vector database setup, or boilerplate wiring.
-
-```
-genai-sandbox new my-project --template agentic_rag --vector-db qdrant --serving chainlit
-cd my-project
-cp .env.example .env        # add your API keys
-make up                     # docker compose up --build
-make ingest                 # index your documents
-make query                  # ask a question
-```
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    genai-sandbox new my-project                  │
-│                          (CLI Scaffold)                          │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │   docker-compose     │
-                    │  (sandbox + DBs)     │
-                    └──────────┬──────────┘
-                               │
-              ┌────────────────▼────────────────┐
-              │       entrypoint.sh              │
-              │  reads stack.yaml → uv install   │
-              │  bootstraps template → launches  │
-              └──┬─────────┬──────────┬─────────┘
-                 │         │          │
-          ┌──────▼──┐ ┌───▼────┐ ┌───▼──────┐
-          │ FastAPI  │ │Chainlit│ │Streamlit │
-          │  :8000   │ │ :8080  │ │  :8501   │
-          └──────┬───┘ └───┬────┘ └───┬──────┘
-                 └─────────┼──────────┘
-                      ┌────▼────┐
-                      │Pipeline │
-                      │ naive_  │
-                      │ rag /   │
-                      │agentic_ │
-                      │  rag    │
-                      └────┬────┘
-                      ┌────▼────────────────────┐
-                      │     Vector Store          │
-                      │  Chroma / Qdrant /        │
-                      │  PGVector / Pinecone /    │
-                      │  FAISS / Weaviate         │
-                      └──────────────────────────┘
-```
-
----
-
-## Quick Start
-
-### 1. Install the CLI
-
-```bash
-pip install genai-sandbox
-# or from source:
-pip install -e .
-```
-
-### 2. Scaffold a new project
-
-```bash
-# Simple RAG with FastAPI + ChromaDB + OpenAI
-genai-sandbox new my-rag-app
-
-# Advanced: Agentic RAG with Chainlit UI + Qdrant + Anthropic
-genai-sandbox new my-agent \
-  --template agentic_rag \
-  --vector-db qdrant \
-  --serving chainlit \
-  --llm anthropic
-```
-
-### 3. Configure
-
-```bash
-cd my-rag-app
-cp .env.example .env       # fill in your API keys
-# Optionally edit config/stack.yaml for fine-grained settings
-```
-
-### 4. Add documents
-
-```bash
-cp ~/Downloads/*.pdf data/
-cp ~/notes/*.md data/
-```
-
-### 5. Start
-
-```bash
-make up        # spins up Docker containers
-make ingest    # indexes /data into the vector store
-make query     # interactive Q&A via CLI
-```
-
----
-
-## Configuration (`config/stack.yaml`)
-
-```yaml
-orchestrator: langgraph       # langchain | langgraph | llamaindex
-vector_db: chroma             # chroma | qdrant | pgvector | pinecone | faiss
-llm_provider: openai          # openai | anthropic | google | ollama | groq
-template: agentic_rag         # naive_rag | agentic_rag
-serving: fastapi              # fastapi | streamlit | chainlit | jupyter
-
-chat_model: gpt-5.4-mini
-embedding_model: text-embedding-3-small
-temperature: 0.0
-chunk_size: 1000
-chunk_overlap: 150
-top_k: 5
-```
-
-Restart the container after changing this file.
-
----
-
-## Templates
-
-### Template A — Naive RAG (`template: naive_rag`)
-
-```
-[User Question]
-      │
-      ▼
-[Embed Question] ──► [Vector Search (MMR)] ──► [Top-K Chunks]
-                                                      │
-                                              [LLM + System Prompt]
-                                                      │
-                                                [Answer + Sources]
-```
-
-**Best for:** Quick prototyping, single-domain Q&A, demos.
-
-### Template B — Agentic RAG (`template: agentic_rag`)
-
-```
-[User Question]
-      │
-      ▼
- [Router Node] ──── needs retrieval? ──No──► [Direct Generate]
-      │Yes
-      ▼
-[Retrieve Node] ──► [Grade Node] ──── pass? ──No──► [Fallback Node]
-                                          │Yes
-                                          ▼
-                                    [Generate Node]
-                                          │
-                                    [Answer + Sources]
-```
-
-**Best for:** Complex queries, multi-hop reasoning, production agents.
-
----
-
-## REST API
-
-When `serving: fastapi`:
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET`  | `/` | Health check + config summary |
-| `POST` | `/ingest` | Index all documents in `/data` |
-| `POST` | `/query` | `{"question": "...", "session_id": "..."}` |
-| `GET`  | `/metrics` | Basic usage metrics |
-| `GET`  | `/docs` | Swagger UI |
-
----
-
-## Docker Profiles
-
-| Profile | Command | Activates |
-|---------|---------|-----------|
-| Default | `docker compose up` | Sandbox + ChromaDB |
-| Qdrant | `docker compose --profile qdrant up` | + Qdrant |
-| PGVector | `docker compose --profile pgvector up` | + Postgres/pgvector |
-
----
-
-## CLI Reference
-
-```bash
-genai-sandbox new <name> [OPTIONS]   # scaffold a project
-genai-sandbox start                  # docker compose up --build
-genai-sandbox stop                   # docker compose down
-genai-sandbox status                 # docker compose ps
-genai-sandbox ingest                 # POST /ingest
-genai-sandbox query "your question"  # POST /query
-```
-
----
+*Built with Python 3.13+ · Powered by LangChain, LangGraph, and the full 2026 AI ecosystem.*
 
 ## Project Structure
 
