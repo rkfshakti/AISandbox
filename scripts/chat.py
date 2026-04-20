@@ -113,7 +113,8 @@ def _show_cost() -> None:
     print(f"  Input tokens:  {_session['input_tokens']:,}")
     print(f"  Output tokens: {_session['output_tokens']:,}")
     cost_col = GREEN if _session["cost_usd"] < 0.01 else YELLOW
-    print(f"  Estimated cost: {c(cost_col, f'${_session[\"cost_usd\"]:.6f}')}")
+    cost_str = f"${_session['cost_usd']:.6f}"
+    print(f"  Estimated cost: {c(cost_col, cost_str)}")
     print()
 
 
