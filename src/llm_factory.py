@@ -12,7 +12,7 @@ Usage:
 
 Supported providers (set via LLM_PROVIDER env var):
     openai | anthropic | google | groq | mistral | ollama |
-    cohere | together | bedrock | azure-openai
+    cohere | together | bedrock | azure-openai | lm-studio
 """
 
 from __future__ import annotations
@@ -43,10 +43,13 @@ COST_PER_1M_TOKENS: dict[str, tuple[float, float]] = {
     "mistral-small-latest": (0.20, 0.60),
     # cohere
     "command-r-plus": (3.00, 15.00),
-    # ollama / local — zero cost
-    "llama3.2": (0.0, 0.0),
-    "qwen2.5":  (0.0, 0.0),
-    "phi-4":    (0.0, 0.0),
+    # local / zero cost
+    "llama3.2":   (0.0, 0.0),
+    "qwen2.5":    (0.0, 0.0),
+    "phi-4":      (0.0, 0.0),
+    "qwen3.5-4b": (0.0, 0.0),
+    "qwen3.5-9b": (0.0, 0.0),
+    "lfm2.5-1.2b-instruct": (0.0, 0.0),
 }
 
 
@@ -95,6 +98,19 @@ def build_llm() -> Any:
         from langchain_ollama import ChatOllama
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         return ChatOllama(model=model, temperature=temperature, base_url=base_url)
+
+    if provider == "lm-studio":
+        # LM Studio exposes an OpenAI-compatible API — no real key needed
+        from langchain_openai import ChatOpenAI
+        base_url = os.getenv("LM_STUDIO_URL", "http://192.168.68.108:1234/v1")
+        api_key  = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
+        return ChatOpenAI(
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            base_url=base_url,
+            api_key=api_key,
+        )
 
     if provider == "cohere":
         from langchain_cohere import ChatCohere
@@ -167,6 +183,20 @@ def build_embeddings() -> Any:
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         return OllamaEmbeddings(model=embed_model, base_url=base_url)
 
+    if provider == "lm-studio":
+        # Reuse OpenAI embeddings client pointed at local server.
+        # check_embedding_ctx_length=False prevents LangChain from pre-tokenizing
+        # the input (LM Studio only accepts plain strings, not token IDs).
+        from langchain_openai import OpenAIEmbeddings
+        base_url = os.getenv("LM_STUDIO_URL", "http://192.168.68.108:1234/v1")
+        api_key  = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
+        return OpenAIEmbeddings(
+            model=embed_model,
+            base_url=base_url,
+            api_key=api_key,
+            check_embedding_ctx_length=False,
+        )
+
     if provider == "cohere":
         from langchain_cohere import CohereEmbeddings
         return CohereEmbeddings(model=embed_model)
@@ -205,6 +235,7 @@ def _default_chat_model(provider: str) -> str:
         "groq":         "llama-3.3-70b-versatile",
         "mistral":      "mistral-small-latest",
         "ollama":       "llama3.2",
+        "lm-studio":    "qwen3.5-4b",
         "cohere":       "command-r-plus",
         "together":     "meta-llama/Llama-3.3-70B-Instruct-Turbo",
         "bedrock":      "anthropic.claude-3-5-sonnet-20241022-v2:0",
@@ -219,6 +250,7 @@ def _default_embedding_model(provider: str) -> str:
         "google":       "models/text-embedding-004",
         "mistral":      "mistral-embed",
         "ollama":       "nomic-embed-text",
+        "lm-studio":    "text-embedding-nomic-embed-text-v1.5",
         "cohere":       "embed-english-v3.0",
         "together":     "togethercomputer/m2-bert-80M-8k-retrieval",
         "bedrock":      "amazon.titan-embed-text-v2:0",

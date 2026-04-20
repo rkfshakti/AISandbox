@@ -137,7 +137,7 @@ class NaiveRAG:
         return {"indexed": len(chunks), "source_files": len(raw_docs)}
 
     # ── Query ─────────────────────────────────────────────────
-    def query(self, question: str) -> dict[str, Any]:
+    def query(self, question: str, session_id: str = "default") -> dict[str, Any]:
         from langchain_core.messages import HumanMessage, SystemMessage
 
         retriever = self.vectorstore.as_retriever(
