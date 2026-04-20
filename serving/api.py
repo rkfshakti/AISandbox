@@ -8,23 +8,30 @@ Endpoints:
   GET  /            → health check + config summary
   POST /ingest      → index documents in /data
   POST /query       → {"question": str, "session_id"?: str}
+  POST /stream      → Server-Sent Events streaming response
   GET  /docs        → Swagger UI (auto-generated)
-  GET  /metrics     → basic usage metrics
+  GET  /metrics     → usage metrics with token counts + cost
 """
 
 from __future__ import annotations
 
+import json
 import os
+import sys
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, Field
+
+# allow `from src.llm_factory import ...` when running locally
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 load_dotenv()
 
@@ -86,6 +93,10 @@ def _load_pipeline() -> Any:
 
     if TEMPLATE == "agentic_rag":
         from templates.agentic_rag.pipeline import get_pipeline
+    elif TEMPLATE == "structured_output":
+        from templates.structured_output.pipeline import get_pipeline
+    elif TEMPLATE == "multi_agent":
+        from templates.multi_agent.pipeline import get_pipeline
     else:
         from templates.naive_rag.pipeline import get_pipeline
 
@@ -96,7 +107,8 @@ def _load_pipeline() -> Any:
 # ── Request / Response models ─────────────────────────────────
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1, description="The question to answer.")
-    session_id: str = Field(default="default", description="Conversation thread ID (agentic_rag).")
+    session_id: str = Field(default="default", description="Conversation thread ID (agentic_rag / multi_agent).")
+    output_schema: str = Field(default="", description="structured_output template only: qa | summary | entities")
 
 
 class QueryResponse(BaseModel):
@@ -113,11 +125,30 @@ class IngestResponse(BaseModel):
 
 # ── Metrics (in-memory, replace with Prometheus in prod) ──────
 _metrics: dict[str, int | float] = {
-    "queries_total": 0,
-    "ingest_total": 0,
-    "errors_total": 0,
-    "total_latency_ms": 0.0,
+    "queries_total":      0,
+    "streams_total":      0,
+    "ingest_total":       0,
+    "errors_total":       0,
+    "total_latency_ms":   0.0,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_cost_usd":     0.0,
 }
+
+
+def _record_token_usage(result: dict) -> None:
+    """Extract token usage from pipeline result and update cost metrics."""
+    try:
+        from src.llm_factory import estimate_cost
+        model         = os.getenv("CHAT_MODEL", "gpt-4o-mini")
+        input_tokens  = result.get("input_tokens", 0)
+        output_tokens = result.get("output_tokens", 0)
+        if input_tokens or output_tokens:
+            _metrics["total_input_tokens"]  += input_tokens
+            _metrics["total_output_tokens"] += output_tokens
+            _metrics["total_cost_usd"]      += estimate_cost(model, input_tokens, output_tokens)
+    except Exception:
+        pass  # cost tracking is best-effort
 
 
 # ── App lifecycle ─────────────────────────────────────────────
@@ -224,18 +255,25 @@ async def query(req: QueryRequest) -> QueryResponse:
     try:
         t0 = time.perf_counter()
         pipeline = _load_pipeline()
-        result = pipeline.query(req.question, session_id=req.session_id)
+        # structured_output pipeline accepts output_schema kwarg
+        if TEMPLATE == "structured_output" and req.output_schema:
+            result = pipeline.query(req.question, session_id=req.session_id, output_schema=req.output_schema)
+        else:
+            result = pipeline.query(req.question, session_id=req.session_id)
         elapsed = (time.perf_counter() - t0) * 1000
         _metrics["queries_total"] += 1
         _metrics["total_latency_ms"] += elapsed
+        _record_token_usage(result)
         return QueryResponse(
             answer=result["answer"],
             sources=result.get("sources", []),
             metadata={
-                "template": TEMPLATE,
-                "latency_ms": round(elapsed, 2),
+                "template":      TEMPLATE,
+                "latency_ms":    round(elapsed, 2),
                 "retrieval_used": result.get("retrieval_used"),
-                "grade_passed": result.get("grade_passed"),
+                "grade_passed":   result.get("grade_passed"),
+                "input_tokens":   result.get("input_tokens"),
+                "output_tokens":  result.get("output_tokens"),
             },
         )
     except Exception as exc:
@@ -244,13 +282,83 @@ async def query(req: QueryRequest) -> QueryResponse:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.post("/stream", tags=["Query"])
+async def stream(req: QueryRequest) -> StreamingResponse:
+    """
+    Stream the answer token-by-token using Server-Sent Events (SSE).
+
+    Connect with EventSource or curl:
+        curl -N -X POST http://localhost:8000/stream \
+             -H 'Content-Type: application/json' \
+             -d '{"question": "What is RAG?"}'
+
+    Each event is a JSON object: {"token": "..."}  
+    A final event {"done": true, "sources": [...]} signals completion.
+    """
+    warning = _check_api_key()
+    if warning:
+        provider = os.getenv("LLM_PROVIDER", "openai")
+        raise HTTPException(
+            status_code=422,
+            detail=f"API key for '{provider}' is not set. Run: python3 scripts/configure.py",
+        )
+
+    async def event_generator():
+        try:
+            pipeline = _load_pipeline()
+            t0 = time.perf_counter()
+
+            # naive_rag exposes an astream method; fall back to sync query
+            if hasattr(pipeline, "astream"):
+                sources = []
+                async for chunk in pipeline.astream(req.question):
+                    if isinstance(chunk, dict):
+                        # final chunk carries sources
+                        sources = chunk.get("sources", [])
+                        token   = chunk.get("token", "")
+                    else:
+                        token = str(chunk)
+                    if token:
+                        yield f"data: {json.dumps({'token': token})}\n\n"
+                elapsed = (time.perf_counter() - t0) * 1000
+                _metrics["streams_total"] += 1
+                _metrics["total_latency_ms"] += elapsed
+                yield f"data: {json.dumps({'done': True, 'sources': sources, 'latency_ms': round(elapsed, 2)})}\n\n"
+            else:
+                # Fallback: run sync query, stream the answer word-by-word
+                result  = pipeline.query(req.question, session_id=req.session_id)
+                answer  = result.get("answer", "")
+                sources = result.get("sources", [])
+                words   = answer.split(" ")
+                for i, word in enumerate(words):
+                    token = word if i == len(words) - 1 else word + " "
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+                elapsed = (time.perf_counter() - t0) * 1000
+                _metrics["streams_total"] += 1
+                _metrics["total_latency_ms"] += elapsed
+                _record_token_usage(result)
+                yield f"data: {json.dumps({'done': True, 'sources': sources, 'latency_ms': round(elapsed, 2)})}\n\n"
+        except Exception as exc:
+            _metrics["errors_total"] += 1
+            logger.exception("Stream failed")
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @app.get("/metrics", tags=["Observability"])
 async def metrics() -> dict:
-    q = _metrics["queries_total"]
-    avg_latency = (_metrics["total_latency_ms"] / q) if q > 0 else 0
+    q           = _metrics["queries_total"]
+    s           = _metrics["streams_total"]
+    total_reqs  = q + s
+    avg_latency = (_metrics["total_latency_ms"] / total_reqs) if total_reqs > 0 else 0
     return {
         **_metrics,
-        "avg_latency_ms": round(avg_latency, 2),
+        "avg_latency_ms":   round(avg_latency, 2),
+        "total_cost_usd":   round(float(_metrics["total_cost_usd"]), 6),
+        "cost_per_query":   round(float(_metrics["total_cost_usd"]) / q, 6) if q > 0 else 0.0,
+        "llm_provider":     os.getenv("LLM_PROVIDER", "openai"),
+        "chat_model":       os.getenv("CHAT_MODEL", "gpt-4o-mini"),
     }
 
 

@@ -26,9 +26,10 @@ from langchain_community.document_loaders import (
     PyPDFLoader,
     TextLoader,
 )
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from loguru import logger
+
+from src.llm_factory import build_embeddings, build_llm
 
 load_dotenv()
 
@@ -116,8 +117,8 @@ class NaiveRAG:
     )
 
     def __init__(self) -> None:
-        self.embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
-        self.llm = ChatOpenAI(model=CHAT_MODEL, temperature=TEMPERATURE)
+        self.embeddings = build_embeddings()
+        self.llm = build_llm()
         self.vectorstore = _build_vectorstore(self.embeddings)
         self.splitter = RecursiveCharacterTextSplitter(
             chunk_size=CHUNK_SIZE,

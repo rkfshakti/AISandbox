@@ -22,23 +22,34 @@ help:
 	@echo ""
 	@echo "  GenAI Sandbox Wrapper — Available Commands"
 	@echo "  ───────────────────────────────────────────"
-	@echo "  make configure      Interactive setup — choose provider & enter API key"
-	@echo "  make serve          Run the API server locally (no Docker needed)"
+	@echo "  ── Setup & Serving ──────────────────────────"
+	@echo "  make configure      Interactive setup — choose provider & API key"
+	@echo "  make serve          Run the API server locally (no Docker)"
+	@echo "  make serve-mcp      Run the MCP server (stdio, for AI clients)"
+	@echo "  make chat           Interactive terminal chat (no server needed)"
 	@echo "  make up             Build & start all containers"
 	@echo "  make down           Stop and remove containers"
-	@echo "  make restart        Restart the sandbox container"
-	@echo "  make logs           Stream sandbox logs"
-	@echo "  make ingest         Index all documents in ./data"
-	@echo "  make query Q='...'  Ask a question"
-	@echo "  make status         Show container health"
-	@echo "  make shell          Open bash inside the sandbox"
-	@echo "  make clean          Remove containers, volumes, and cache"
-	@echo "  make rebuild        Force full image rebuild"
-	@echo "  make metrics        Show API usage metrics"
-	@echo "  make docs           Open Swagger UI in browser"
 	@echo ""
-	@echo "  Vector DB profiles: VECTOR_DB=qdrant|pgvector|ollama|milvus"
-	@echo "  Example:  make up VECTOR_DB=qdrant"
+	@echo "  ── Data & Queries ───────────────────────────"
+	@echo "  make ingest         Index all documents in ./data"
+	@echo "  make query Q='...'  Ask a question (REST)"
+	@echo "  make stream Q='...' Stream a response token-by-token (SSE)"
+	@echo "  make eval           Evaluate RAG quality with Ragas"
+	@echo ""
+	@echo "  ── Observability ────────────────────────────"
+	@echo "  make metrics        Show API usage, token counts & cost"
+	@echo "  make docs           Open Swagger UI in browser"
+	@echo "  make logs           Stream sandbox logs"
+	@echo "  make status         Show container health"
+	@echo ""
+	@echo "  ── Templates ────────────────────────────────"
+	@echo "  naive_rag           Simple retrieval + generation"
+	@echo "  agentic_rag         LangGraph: router → grade → fallback"
+	@echo "  structured_output   PydanticAI: typed schema responses"
+	@echo "  multi_agent         Supervisor → Researcher → Critic → Writer"
+	@echo "  mcp_server          MCP tools for Copilot/Claude/Cursor"
+	@echo ""
+	@echo "  Switch:  make configure  (or edit TEMPLATE in config/stack.yaml)"
 	@echo ""
 
 # ── Interactive configure ─────────────────────────────────────
@@ -126,7 +137,48 @@ else
 		-d '{"question": "$(Q)", "session_id": "makefile"}' \
 		| python3 -m json.tool
 endif
+# ── Stream (SSE) ───────────────────────────────────────
+.PHONY: stream
+stream:
+ifndef Q
+	@echo "Usage: make stream Q='your question here'"
+else
+	@echo "Streaming response (Ctrl+C to stop):"
+	@curl -N -s -X POST $(API_URL)/stream \
+		-H "Content-Type: application/json" \
+		-d '{"question": "$(Q)", "session_id": "makefile"}'
+	@echo ""
+endif
 
+# ── RAG Evaluation ────────────────────────────────────
+.PHONY: eval
+eval:
+	@echo "Running RAG evaluation (API must be running: make serve)"
+	@if [ -f .venv/bin/python3 ]; then \
+		.venv/bin/python3 scripts/eval.py; \
+	else \
+		python3 scripts/eval.py; \
+	fi
+
+# ── Terminal Chat (no server needed) ────────────────────
+.PHONY: chat
+chat:
+	@if [ -f .venv/bin/python3 ]; then \
+		PYTHONPATH=. .venv/bin/python3 scripts/chat.py; \
+	else \
+		PYTHONPATH=. python3 scripts/chat.py; \
+	fi
+
+# ── MCP Server (stdio for AI clients) ───────────────────
+.PHONY: serve-mcp
+serve-mcp:
+	@echo "Starting MCP server (stdio transport)..."
+	@echo "Connect via Claude Desktop or VS Code MCP extension."
+	@if [ -f .venv/bin/python3 ]; then \
+		PYTHONPATH=. .venv/bin/python3 -m templates.mcp_server.pipeline; \
+	else \
+		PYTHONPATH=. python3 -m templates.mcp_server.pipeline; \
+	fi
 # ── Metrics ───────────────────────────────────────────────────
 .PHONY: metrics
 metrics:

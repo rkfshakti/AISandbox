@@ -187,8 +187,11 @@ VECTOR_DBS = [
 ]
 
 TEMPLATES = [
-    ("naive_rag",   "Naive RAG     — Load → Split → Embed → Retrieve → Generate"),
-    ("agentic_rag", "Agentic RAG   — LangGraph Router → Grade → Fallback loop"),
+    ("naive_rag",         "Naive RAG          — Load → Split → Embed → Retrieve → Generate"),
+    ("agentic_rag",       "Agentic RAG        — LangGraph Router → Grade → Fallback loop"),
+    ("structured_output", "Structured Output  — PydanticAI typed schemas (QA/Summary/Entities)"),
+    ("multi_agent",       "Multi-Agent        — Supervisor → Researcher → Critic → Writer"),
+    ("mcp_server",        "MCP Server         — Expose knowledge base as MCP tools (Copilot/Claude)"),
 ]
 
 SERVING_LAYERS = [

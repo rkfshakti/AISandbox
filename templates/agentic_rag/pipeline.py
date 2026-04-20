@@ -32,9 +32,9 @@ from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langgraph.checkpoint.memory import MemorySaver
+from src.llm_factory import build_embeddings, build_llm
 from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
@@ -51,8 +51,8 @@ CHAT_MODEL = os.getenv("CHAT_MODEL", "gpt-4o-mini")
 
 
 # ── Shared LLM ────────────────────────────────────────────────
-_llm = ChatOpenAI(model=CHAT_MODEL, temperature=0.0)
-_llm_json = ChatOpenAI(model=CHAT_MODEL, temperature=0.0)
+_llm = build_llm()
+_llm_json = build_llm()
 
 
 # ── Graph State ───────────────────────────────────────────────
@@ -222,7 +222,7 @@ class AgenticRAG:
     """LangGraph-powered agentic RAG pipeline."""
 
     def __init__(self) -> None:
-        self.embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
+        self.embeddings = build_embeddings()
         self.vectorstore = _build_vectorstore(self.embeddings)
         self.retriever = self.vectorstore.as_retriever(
             search_type="mmr",
